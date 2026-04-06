@@ -1,27 +1,69 @@
-import { Clock, FileText, Hash, LayoutGrid, List, Plus } from "lucide-react";
+import {
+  Clock,
+  FileText,
+  FolderOpen,
+  Hash,
+  LayoutGrid,
+  List,
+} from "lucide-react";
 import { useState } from "react";
 import { formatRelativeTime } from "../lib/storage";
-import type { Project } from "../lib/types";
+import type { Project, Series } from "../lib/types";
 
 interface LibraryScreenProps {
   projects: Project[];
+  series: Series[];
   onOpenProject: (project: Project) => void;
-  onNewProject: () => void;
+  onOpenSeries: (series: Series) => void;
 }
 
 type ViewMode = "grid" | "list";
+type FilterMode = "all" | "Screenplay" | "Novel" | "Series";
 
 export function LibraryScreen({
   projects,
+  series,
   onOpenProject,
-  onNewProject,
+  onOpenSeries,
 }: LibraryScreenProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const sorted = [...projects].sort((a, b) => b.lastEdited - a.lastEdited);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filter, setFilter] = useState<FilterMode>("all");
+
+  const sortedProjects = [...projects].sort(
+    (a, b) => b.lastEdited - a.lastEdited,
+  );
+  const sortedSeries = [...series].sort((a, b) => b.lastEdited - a.lastEdited);
+
+  const totalCount = projects.length + series.length;
+
+  // Build unified list for display
+  type LibraryItem =
+    | { kind: "project"; data: Project }
+    | { kind: "series"; data: Series };
+
+  const allItems: LibraryItem[] = [
+    ...sortedProjects.map((p) => ({ kind: "project" as const, data: p })),
+    ...sortedSeries.map((s) => ({ kind: "series" as const, data: s })),
+  ];
+
+  const filtered = allItems.filter((item) => {
+    if (filter === "all") return true;
+    if (filter === "Series") return item.kind === "series";
+    if (filter === "Screenplay" || filter === "Novel") {
+      return item.kind === "project" && item.data.type === filter;
+    }
+    return true;
+  });
 
   return (
-    <div data-ocid="library.page" className="min-h-screen pb-36 relative z-10">
-      <div className="px-6 pt-10 pb-6">
+    <div
+      data-ocid="library.page"
+      className="min-h-screen relative z-10"
+      style={{ paddingBottom: "calc(8vh + 28px)" }}
+    >
+      {/* Header */}
+      <div style={{ padding: "24px 16px 12px 16px" }}>
         <div className="flex items-start justify-between">
           <div>
             <h1
@@ -31,7 +73,7 @@ export function LibraryScreen({
               Library
             </h1>
             <p className="text-sm" style={{ color: "#9AA0A6" }}>
-              {projects.length} {projects.length === 1 ? "project" : "projects"}
+              {totalCount} {totalCount === 1 ? "item" : "items"}
             </p>
           </div>
           <div
@@ -41,10 +83,14 @@ export function LibraryScreen({
               border: "1px solid rgba(255,255,255,0.07)",
             }}
           >
+            {/* Grid icon — toggles filter bar */}
             <button
               type="button"
               data-ocid="library.grid.toggle"
-              onClick={() => setViewMode("grid")}
+              onClick={() => {
+                setViewMode("grid");
+                setShowFilter((v) => !v);
+              }}
               className="p-2 rounded-lg transition-all duration-200 cursor-pointer"
               style={{
                 background:
@@ -59,7 +105,10 @@ export function LibraryScreen({
             <button
               type="button"
               data-ocid="library.list.toggle"
-              onClick={() => setViewMode("list")}
+              onClick={() => {
+                setViewMode("list");
+                setShowFilter(false);
+              }}
               className="p-2 rounded-lg transition-all duration-200 cursor-pointer"
               style={{
                 background:
@@ -73,10 +122,52 @@ export function LibraryScreen({
             </button>
           </div>
         </div>
+
+        {/* Filter bar — slides open when grid icon clicked */}
+        <div
+          style={{
+            overflow: "hidden",
+            maxHeight: showFilter ? "48px" : "0px",
+            transition: "max-height 0.25s ease",
+            marginTop: showFilter ? "10px" : "0",
+          }}
+        >
+          <div style={{ display: "flex", gap: "8px", paddingBottom: "4px" }}>
+            {(["all", "Screenplay", "Novel", "Series"] as FilterMode[]).map(
+              (f) => (
+                <button
+                  key={f}
+                  type="button"
+                  data-ocid={`library.filter.${f.toLowerCase()}.tab`}
+                  onClick={() => setFilter(f)}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: "20px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background:
+                      filter === f
+                        ? "rgba(34,197,94,0.15)"
+                        : "rgba(255,255,255,0.05)",
+                    border:
+                      filter === f
+                        ? "1px solid rgba(34,197,94,0.45)"
+                        : "1px solid rgba(255,255,255,0.08)",
+                    color: filter === f ? "#22C55E" : "#9AA0A6",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {f === "all" ? "All" : f}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="px-6">
-        {sorted.length === 0 ? (
+      <div style={{ paddingLeft: "16px", paddingRight: "16px" }}>
+        {filtered.length === 0 ? (
           <div
             data-ocid="library.empty_state"
             className="flex flex-col items-center justify-center py-20 text-center"
@@ -90,168 +181,290 @@ export function LibraryScreen({
             >
               <FileText size={28} style={{ color: "rgba(34,197,94,0.5)" }} />
             </div>
-            <p className="text-white font-semibold mb-1">No projects yet</p>
+            <p className="text-white font-semibold mb-1">No items yet</p>
             <p className="text-sm" style={{ color: "#9AA0A6" }}>
               Start writing something amazing
             </p>
           </div>
         ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-2 gap-4">
-            {sorted.map((project, idx) => (
-              <button
-                type="button"
-                key={project.id}
-                data-ocid={`library.item.${idx + 1}`}
-                className="rounded-2xl p-4 cursor-pointer transition-all duration-200 text-left"
-                style={{
-                  background: "rgba(12,12,12,0.9)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                }}
-                onClick={() => onOpenProject(project)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(34,197,94,0.25)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)";
-                }}
-              >
-                <div
-                  className="w-full aspect-square rounded-xl mb-3 flex items-center justify-center"
+          <div
+            className="grid grid-cols-2"
+            style={{ gap: "14px", paddingBottom: "12px" }}
+          >
+            {filtered.map((item, idx) =>
+              item.kind === "project" ? (
+                <button
+                  type="button"
+                  key={item.data.id}
+                  data-ocid={`library.item.${idx + 1}`}
+                  className="rounded-2xl p-3 cursor-pointer transition-all duration-200 text-left"
                   style={{
-                    background:
-                      "linear-gradient(135deg, rgba(34,197,94,0.07) 0%, rgba(0,0,0,0.5) 100%)",
-                    border: "1px solid rgba(255,255,255,0.04)",
+                    background: "rgba(0,0,0,0.75)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                  }}
+                  onClick={() => onOpenProject(item.data)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(34,197,94,0.25)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor =
+                      "rgba(255,255,255,0.07)";
                   }}
                 >
-                  <FileText
-                    size={28}
-                    style={{ color: "rgba(34,197,94,0.35)" }}
-                  />
-                </div>
-                <div
-                  className="inline-block px-1.5 py-0.5 rounded mb-1.5"
-                  style={{
-                    background: "rgba(34,197,94,0.1)",
-                    color: "#22C55E",
-                    fontSize: "9px",
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  {project.type.toUpperCase()}
-                </div>
-                <p className="text-sm font-bold text-white leading-tight line-clamp-2 mb-2">
-                  {project.title}
-                </p>
-                <div className="space-y-1">
                   <div
-                    className="flex items-center gap-1 text-xs"
-                    style={{ color: "#6B7280" }}
+                    className="w-full rounded-xl mb-2 flex items-center justify-center"
+                    style={{
+                      aspectRatio: "4/3",
+                      background:
+                        "linear-gradient(135deg, rgba(34,197,94,0.07) 0%, rgba(0,0,0,0.5) 100%)",
+                      border: "1px solid rgba(255,255,255,0.04)",
+                    }}
                   >
-                    <Hash size={10} />
-                    <span>{project.wordCount.toLocaleString()} words</span>
-                    <span className="mx-0.5">·</span>
-                    <span>{project.sceneCount} scenes</span>
+                    <FileText
+                      size={26}
+                      style={{ color: "rgba(34,197,94,0.35)" }}
+                    />
                   </div>
                   <div
-                    className="flex items-center gap-1 text-xs"
-                    style={{ color: "#6B7280" }}
+                    className="inline-block px-1.5 py-0.5 rounded mb-1"
+                    style={{
+                      background: "rgba(34,197,94,0.1)",
+                      color: "#22C55E",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                    }}
                   >
-                    <Clock size={10} />
-                    <span>{formatRelativeTime(project.lastEdited)}</span>
+                    {item.data.type.toUpperCase()}
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {sorted.map((project, idx) => (
-              <button
-                type="button"
-                key={project.id}
-                data-ocid={`library.item.${idx + 1}`}
-                className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-200 w-full text-left"
-                style={{
-                  background: "rgba(12,12,12,0.9)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}
-                onClick={() => onOpenProject(project)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(34,197,94,0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-                }}
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{
-                    background: "rgba(34,197,94,0.08)",
-                    border: "1px solid rgba(34,197,94,0.15)",
-                  }}
-                >
-                  <FileText size={16} style={{ color: "#22C55E" }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-sm font-semibold text-white truncate">
-                      {project.title}
-                    </p>
+                  <p className="text-sm font-bold text-white leading-tight line-clamp-2 mb-1.5">
+                    {item.data.title}
+                  </p>
+                  <div
+                    className="flex items-center text-xs"
+                    style={{ color: "#6B7280", gap: "4px", flexWrap: "nowrap" }}
+                  >
+                    <Hash size={9} style={{ flexShrink: 0 }} />
+                    <span style={{ flexShrink: 0 }}>
+                      {item.data.wordCount.toLocaleString()}w
+                    </span>
+                    <span style={{ flexShrink: 0 }}>&middot;</span>
+                    <span style={{ flexShrink: 0 }}>
+                      {item.data.sceneCount}sc
+                    </span>
+                    <span style={{ flexShrink: 0 }}>&middot;</span>
+                    <Clock size={9} style={{ flexShrink: 0 }} />
                     <span
-                      className="flex-shrink-0 px-1.5 py-0.5 rounded"
                       style={{
-                        background: "rgba(34,197,94,0.1)",
-                        color: "#22C55E",
-                        fontSize: "9px",
-                        fontWeight: 700,
-                        letterSpacing: "0.06em",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {project.type.toUpperCase()}
+                      {formatRelativeTime(item.data.lastEdited)}
                     </span>
                   </div>
-                  <p className="text-xs" style={{ color: "#6B7280" }}>
-                    {project.wordCount.toLocaleString()} words &middot;{" "}
-                    {project.sceneCount} scenes
-                  </p>
-                </div>
-                <div
-                  className="text-xs flex-shrink-0"
-                  style={{ color: "#6B7280" }}
+                </button>
+              ) : (
+                // Series card
+                <button
+                  type="button"
+                  key={item.data.id}
+                  data-ocid={`library.item.${idx + 1}`}
+                  className="rounded-2xl p-3 cursor-pointer transition-all duration-200 text-left"
+                  style={{
+                    background: "rgba(0,0,0,0.75)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                  }}
+                  onClick={() => onOpenSeries(item.data)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(34,197,94,0.25)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor =
+                      "rgba(255,255,255,0.07)";
+                  }}
                 >
-                  {formatRelativeTime(project.lastEdited)}
-                </div>
-              </button>
-            ))}
+                  <div
+                    className="w-full rounded-xl mb-2 flex items-center justify-center"
+                    style={{
+                      aspectRatio: "4/3",
+                      background:
+                        "linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(0,0,0,0.5) 100%)",
+                      border: "1px solid rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <FolderOpen
+                      size={26}
+                      style={{ color: "rgba(34,197,94,0.5)" }}
+                    />
+                  </div>
+                  <div
+                    className="inline-block px-1.5 py-0.5 rounded mb-1"
+                    style={{
+                      background: "rgba(34,197,94,0.15)",
+                      color: "#22C55E",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    SERIES
+                  </div>
+                  <p className="text-sm font-bold text-white leading-tight line-clamp-2 mb-1.5">
+                    {item.data.title}
+                  </p>
+                  <div
+                    className="flex items-center text-xs"
+                    style={{ color: "#6B7280", gap: "4px", flexWrap: "nowrap" }}
+                  >
+                    <FolderOpen size={9} style={{ flexShrink: 0 }} />
+                    <span style={{ flexShrink: 0 }}>
+                      {item.data.itemCount} items
+                    </span>
+                    <span style={{ flexShrink: 0 }}>&middot;</span>
+                    <Clock size={9} style={{ flexShrink: 0 }} />
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatRelativeTime(item.data.lastEdited)}
+                    </span>
+                  </div>
+                </button>
+              ),
+            )}
+          </div>
+        ) : (
+          // List view
+          <div className="space-y-2" style={{ paddingBottom: "12px" }}>
+            {filtered.map((item, idx) =>
+              item.kind === "project" ? (
+                <button
+                  type="button"
+                  key={item.data.id}
+                  data-ocid={`library.item.${idx + 1}`}
+                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-200 w-full text-left"
+                  style={{
+                    background: "rgba(0,0,0,0.75)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                  onClick={() => onOpenProject(item.data)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(34,197,94,0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor =
+                      "rgba(255,255,255,0.06)";
+                  }}
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: "rgba(34,197,94,0.08)",
+                      border: "1px solid rgba(34,197,94,0.15)",
+                    }}
+                  >
+                    <FileText size={16} style={{ color: "#22C55E" }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {item.data.title}
+                      </p>
+                      <span
+                        className="flex-shrink-0 px-1.5 py-0.5 rounded"
+                        style={{
+                          background: "rgba(34,197,94,0.1)",
+                          color: "#22C55E",
+                          fontSize: "9px",
+                          fontWeight: 700,
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        {item.data.type.toUpperCase()}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center gap-1 text-xs"
+                      style={{ color: "#6B7280" }}
+                    >
+                      <Hash size={9} />
+                      <span>{item.data.wordCount.toLocaleString()} words</span>
+                      <span>&middot;</span>
+                      <span>{item.data.sceneCount} scenes</span>
+                      <span>&middot;</span>
+                      <Clock size={9} />
+                      <span>{formatRelativeTime(item.data.lastEdited)}</span>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  key={item.data.id}
+                  data-ocid={`library.item.${idx + 1}`}
+                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-200 w-full text-left"
+                  style={{
+                    background: "rgba(0,0,0,0.75)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                  onClick={() => onOpenSeries(item.data)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(34,197,94,0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor =
+                      "rgba(255,255,255,0.06)";
+                  }}
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: "rgba(34,197,94,0.1)",
+                      border: "1px solid rgba(34,197,94,0.2)",
+                    }}
+                  >
+                    <FolderOpen size={16} style={{ color: "#22C55E" }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {item.data.title}
+                      </p>
+                      <span
+                        className="flex-shrink-0 px-1.5 py-0.5 rounded"
+                        style={{
+                          background: "rgba(34,197,94,0.15)",
+                          color: "#22C55E",
+                          fontSize: "9px",
+                          fontWeight: 700,
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        SERIES
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center gap-1 text-xs"
+                      style={{ color: "#6B7280" }}
+                    >
+                      <FolderOpen size={9} />
+                      <span>{item.data.itemCount} items</span>
+                      <span>&middot;</span>
+                      <Clock size={9} />
+                      <span>{formatRelativeTime(item.data.lastEdited)}</span>
+                    </div>
+                  </div>
+                </button>
+              ),
+            )}
           </div>
         )}
       </div>
-
-      <button
-        type="button"
-        data-ocid="library.new.open_modal_button"
-        onClick={onNewProject}
-        className="fixed z-40 flex items-center justify-center w-14 h-14 rounded-full cursor-pointer transition-all duration-200"
-        style={{
-          bottom: "108px",
-          right: "24px",
-          background: "#22C55E",
-          boxShadow: "0 4px 20px rgba(34,197,94,0.4)",
-          color: "#050505",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "#16a34a";
-          e.currentTarget.style.transform = "scale(1.05)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "#22C55E";
-          e.currentTarget.style.transform = "scale(1)";
-        }}
-        aria-label="Create new project"
-      >
-        <Plus size={24} />
-      </button>
     </div>
   );
 }

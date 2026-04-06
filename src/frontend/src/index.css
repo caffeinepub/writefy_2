@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=League+Spartan:wght@400;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&family=Roboto+Slab:wght@300;400;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -50,10 +50,10 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    background: #050505;
-    min-height: 100vh;
+    @apply text-foreground;
+    background: #000000;
     margin: 0;
+    min-height: 100vh;
     font-family: Inter, system-ui, -apple-system, sans-serif;
     overflow-x: hidden;
   }
@@ -61,33 +61,95 @@
   body::before {
     content: "";
     position: fixed;
-    top: -30%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 800px;
-    height: 800px;
+    inset: 0;
     background: radial-gradient(
-      circle,
-      rgba(0, 255, 120, 0.08),
-      transparent 70%
+      circle at 50% 40%,
+      var(--bg-glow, rgba(0, 255, 120, 0.13)),
+      transparent 60%
     );
-    z-index: 0;
+    z-index: -2;
     pointer-events: none;
   }
 
-  body::after {
-    content: "W WRITEFY";
-    position: fixed;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 55px;
-    color: rgba(0, 255, 120, 0.03);
-    z-index: 0;
-    pointer-events: none;
-    white-space: nowrap;
-    letter-spacing: 0.1em;
-    font-weight: 900;
+  body[data-theme="day"]::before {
+    display: none;
+  }
+
+  /* ── DAY THEME: comprehensive text/border/bg overrides ── */
+  body[data-theme="day"] {
+    background: #f5f0e8 !important;
+    color: #1a1a1a !important;
+  }
+
+  body[data-theme="day"] h1,
+  body[data-theme="day"] h2,
+  body[data-theme="day"] h3,
+  body[data-theme="day"] h4,
+  body[data-theme="day"] p,
+  body[data-theme="day"] span,
+  body[data-theme="day"] label,
+  body[data-theme="day"] li {
+    color: #1a1a1a;
+  }
+
+  /* Force dark text on Tailwind white text classes */
+  body[data-theme="day"] .text-white {
+    color: #1a1a1a !important;
+  }
+
+  body[data-theme="day"] .text-gray-400,
+  body[data-theme="day"] .text-gray-500,
+  body[data-theme="day"] .text-gray-600 {
+    color: #555555 !important;
+  }
+
+  /* Editor textarea and title input — must be dark on day theme */
+  body[data-theme="day"] textarea,
+  body[data-theme="day"] input[type="text"] {
+    color: #1a1a1a !important;
+    caret-color: #1a1a1a !important;
+  }
+
+  body[data-theme="day"] textarea::placeholder,
+  body[data-theme="day"] input[type="text"]::placeholder {
+    color: #888888 !important;
+  }
+
+  /* Cards, containers, rounded elements */
+  body[data-theme="day"] .rounded-xl,
+  body[data-theme="day"] .rounded-2xl {
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  /* Bottom nav */
+  body[data-theme="day"] [data-ocid="bottom_nav"] {
+    background: rgba(235, 228, 215, 0.97) !important;
+    border-top: 2px solid rgba(0, 0, 0, 0.15) !important;
+  }
+
+  /* Global header */
+  body[data-theme="day"] [data-ocid="global_header.panel"] {
+    background: rgba(240, 235, 220, 0.95) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Hamburger drawer */
+  body[data-theme="day"] [data-ocid="hamburger.panel"] {
+    background: #ede8db !important;
+    border-right-color: rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Library / settings cards */
+  body[data-theme="day"] [data-ocid="library.page"] .rounded-2xl,
+  body[data-theme="day"] [data-ocid="settings.page"] .rounded-2xl {
+    background: rgba(255, 255, 255, 0.7) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+  }
+
+  /* Editor area */
+  body[data-theme="day"] [data-ocid="create.editor"] {
+    color: #1a1a1a !important;
+    background: rgba(255, 255, 255, 0.6) !important;
   }
 }
 

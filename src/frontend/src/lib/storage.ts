@@ -1,6 +1,13 @@
-import type { Project, ProjectType } from "./types";
+import {
+  dbGetAllProjects,
+  dbGetAllSeries,
+  dbPutProject,
+  dbPutSeries,
+} from "./db";
+import type { Project, ProjectType, Series, SeriesItem } from "./types";
 
 const STORAGE_KEY = "writefy_projects";
+const SERIES_KEY = "writefy_series";
 
 const SAMPLE_PROJECTS: Project[] = [
   {
@@ -181,7 +188,10 @@ export function saveProject(project: Project): void {
   saveProjects(projects);
 }
 
-export function createProject(title: string, type: ProjectType): Project {
+export function createProject(
+  title: string,
+  type: Exclude<ProjectType, "Series">,
+): Project {
   const now = Date.now();
   return {
     id: `proj_${now}_${Math.random().toString(36).slice(2, 8)}`,
@@ -194,6 +204,83 @@ export function createProject(title: string, type: ProjectType): Project {
     lastEdited: now,
     createdAt: now,
   };
+}
+
+// ── Series Storage ──────────────────────────────────────────────────────────
+
+export function loadSeries(): Series[] {
+  try {
+    const raw = localStorage.getItem(SERIES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Series[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSeries(seriesList: Series[]): void {
+  localStorage.setItem(SERIES_KEY, JSON.stringify(seriesList));
+}
+
+export function saveSingleSeries(series: Series): void {
+  const list = loadSeries();
+  const idx = list.findIndex((s) => s.id === series.id);
+  if (idx >= 0) {
+    list[idx] = series;
+  } else {
+    list.unshift(series);
+  }
+  saveSeries(list);
+}
+
+export function createSeries(title: string, description?: string): Series {
+  const now = Date.now();
+  return {
+    id: `series_${now}_${Math.random().toString(36).slice(2, 8)}`,
+    title,
+    description,
+    items: [],
+    wordCount: 0,
+    itemCount: 0,
+    lastEdited: now,
+    createdAt: now,
+  };
+}
+
+export function createSeriesItem(
+  name: string,
+  type: "folder" | "episode",
+  order: number,
+  projectType?: "Screenplay" | "Novel",
+  projectId?: string,
+): SeriesItem {
+  return {
+    id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    type,
+    projectType,
+    projectId,
+    children: type === "folder" ? [] : undefined,
+    order,
+  };
+}
+
+// Returns all projects referenced inside series items (recursively)
+export function loadAllSeriesProjects(series: Series): Project[] {
+  const allProjects = loadProjects();
+  const ids = new Set<string>();
+
+  function collectIds(items: SeriesItem[]) {
+    for (const item of items) {
+      if (item.type === "episode" && item.projectId) {
+        ids.add(item.projectId);
+      }
+      if (item.children) collectIds(item.children);
+    }
+  }
+
+  collectIds(series.items);
+  return allProjects.filter((p) => ids.has(p.id));
 }
 
 export function countWords(text: string): number {
@@ -213,4 +300,43 @@ export function formatRelativeTime(timestamp: number): string {
     month: "short",
     day: "numeric",
   });
+}
+
+// ── IndexedDB async backup functions ────────────────────────────────────────
+
+export async function saveProjectWithBackup(project: Project): Promise<void> {
+  saveProject(project);
+  await dbPutProject(project);
+}
+
+export async function loadProjectsFromDB(): Promise<Project[]> {
+  const dbProjects = await dbGetAllProjects();
+  if (dbProjects.length > 0) return dbProjects;
+  return loadProjects();
+}
+
+export async function migrateToIndexedDB(): Promise<void> {
+  try {
+    const [dbProjects, dbSeriesList] = await Promise.all([
+      dbGetAllProjects(),
+      dbGetAllSeries(),
+    ]);
+
+    const localProjects = loadProjects();
+    const localSeries = loadSeries();
+
+    const dbProjectIds = new Set(dbProjects.map((p) => p.id));
+    const dbSeriesIds = new Set(dbSeriesList.map((s) => s.id));
+
+    await Promise.all([
+      ...localProjects
+        .filter((p) => !dbProjectIds.has(p.id))
+        .map((p) => dbPutProject(p)),
+      ...localSeries
+        .filter((s) => !dbSeriesIds.has(s.id))
+        .map((s) => dbPutSeries(s)),
+    ]);
+  } catch {
+    // Silently fail — IndexedDB is a bonus layer, not critical
+  }
 }

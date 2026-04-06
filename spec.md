@@ -1,31 +1,71 @@
-# Writefy - Premium Screenplay Writing App
+# Writefy — Screenplay Writing Assist Features
 
 ## Current State
-New project. No existing application files.
+- Block-based screenplay engine in `useScreenplayEngine.ts` (1005 lines)
+- LineType union: `"scene-heading" | "action" | "character" | "dialogue" | "parenthetical" | "transition"`
+- Toolbar buttons: Undo, Redo, Slugline, Action, Character, Dialogue, Paren, Transition, A-, A+, B/I/U/S, Font, Save, TW, Import
+- Transition button calls `engine.setLineType()` immediately (no delay, no selection list)
+- No "Shot" or "VO" LineType or toolbar buttons
+- INT/EXT autocorrect only works via SPACE shortcut — no protection against device spellcheck turning "ext" into "Extract"
+- Parenthetical: `setLineType` wraps in parens but no `(` auto-close or text-selection wrapping
+- Character memory fully works (Set, suggestions, TAB fill)
 
 ## Requested Changes (Diff)
 
 ### Add
-- Full screenplay writing app with Spotify-style bottom navigation (4 tabs: Home, Library, Create, Play)
-- Global dark theme with black background, subtle green radial gradient glow, and watermark "W WRITEFY" text
-- Home screen with: Continue Writing hero card (type, title, last edited, Resume Writing CTA), Recent Projects horizontal scroll, Start New dashed card
-- Library screen with: title/subtitle, grid/list view toggle, 2-column project cards (type, title, word count, scene count, last edited), floating + button
-- Create/Editor screen with: project title + metadata header, Write/Outline tabs (text style with underline active), formatting toolbar (Slugline, Action, Character, Dialogue), clean textarea editor
-- Play/Reader screen with: clean screenplay reader, centered dialogue, cinematic spacing, minimal UI
-- All navigation between screens functional
-- Backend: project CRUD (title, type, content, scenes, word count, last edited timestamps)
+- `"shot"` to `LineType` union in useScreenplayEngine.ts
+- Shot toolbar button (alongside existing buttons, no redesign)
+- VO toolbar button (alongside existing buttons, no redesign)
+- `pendingMode` state in CreateScreen: tracks `"transition" | "shot" | "vo" | null` — set when user clicks Transition/Shot/VO but not yet typed
+- Selection dropdown component: opens when `pendingMode !== null` AND user types first char or presses Enter on that line
+- TRANSITIONS_LIST: CUT TO:, SMASH CUT:, MATCH CUT:, JUMP CUT:, DISSOLVE TO:, FADE IN:, FADE OUT:, WIPE TO:, L CUT:, J CUT:
+- SHOT_TYPES_LIST: CLOSE UP (CU), EXTREME CLOSE UP (ECU), MEDIUM SHOT (MS), LONG SHOT (LS), OVER THE SHOULDER (OTS), POV SHOT, WIDE SHOT, TRACKING SHOT, PAN SHOT, TILT SHOT
+- VO_TYPES_LIST: (V.O.), (O.S.), (CONT'D), (FILTERED), (PHONE), (RADIO)
+- Insert behavior: selecting from list inserts formatted text, cursor at end
+  - Transition → uppercase text right-aligned (e.g. "CUT TO:")
+  - Shot → uppercase action-style (e.g. "CLOSE UP:")
+  - VO → appended to character name (e.g. "RAHUL (V.O.)")
+- `getLineStyle` case for `"shot"`: uppercase, action-style block (full width)
+- INT/EXT spellcheck protection: intercept `onInput` in ScreenplayLine, detect if text contains "Extract" or "Internal" or other common autocorrections of "ext"/"int", reverse them back. Also add `autoCorrect="off" autoCapitalize="off" spellCheck={false}` to contenteditable divs.
+- Smart parenthesis Case 1: clicking Paren toolbar with no selection → insert `()` with cursor between them
+- Smart parenthesis Case 2: clicking Paren toolbar with text selected → wrap in `(selected text)`
+- Smart parenthesis Case 3: typing `(` auto-inserts closing `)` and places cursor inside
 
 ### Modify
-N/A — new project
+- Transition toolbar button: clicking sets `pendingMode = "transition"` instead of calling setLineType immediately. The actual setLineType + insert happens when the user selects from the dropdown.
+- ScreenplayLine contenteditable: add `autoCorrect="off" autoCapitalize="characters" spellCheck={false}` attributes. Add `onInput` intercept for "ext"→"EXT." and "int"→"INT." reversal.
+- Parenthetical toolbar button onClick: check for text selection first; if selection → wrap; if no selection → insert `()` with cursor inside.
+- `handleLineKeyDown` for `(` key: auto-insert `)` and reposition cursor.
 
 ### Remove
-N/A — new project
+- Nothing removed. UI layout, spacing, toolbar design unchanged.
 
 ## Implementation Plan
-1. Backend actor: Project type with id, title, type (Screenplay/Novel), content, scenes array, word count, lastEdited timestamp. CRUD operations: createProject, getProjects, updateProject, deleteProject, getProject.
-2. Frontend: React app with global CSS background system (body, ::before, ::after pseudo-elements), bottom nav component, 4 screen components.
-3. Home screen: hero card from most-recent project, horizontal scroll recent projects, dashed new project card.
-4. Library screen: LayoutGrid/List toggle, 2-col grid cards with metadata, floating action button.
-5. Create screen: editor header, Write/Outline tab switcher, formatting toolbar row, contenteditable or textarea editor.
-6. Play screen: reader mode renderer parsing screenplay format, centered dialogue blocks, cinematic spacing.
-7. Wire all navigation interactions and card click-throughs.
+
+1. **`useScreenplayEngine.ts`**:
+   - Add `"shot"` to `LineType`
+   - Add `getLineStyle` case for `"shot"`: full-width, uppercase, same weight as action
+   - Add `detectLineType` recognition for SHOT prefixes (CLOSE UP:, ECU:, MS:, etc.)
+   - In `handleLineKeyDown` Enter: add `"shot"` case → nextType = `"action"`
+   - Export `insertVOOnCharacter(id: string, voType: string)` helper: gets character line, appends VO suffix to name
+   - In `setLineText`: handle `"shot"` type → uppercase text
+
+2. **`CreateScreen.tsx`**:
+   - Add `pendingMode: "transition" | "shot" | "vo" | null` state
+   - Add Shot + VO toolbar buttons (same style as existing Transition/Paren buttons)
+   - Change Transition onClick: `setPendingMode("transition")` only
+   - Shot onClick: `setPendingMode("shot")`
+   - VO onClick: `setPendingMode("vo")`
+   - Add `SelectionDropdown` component (inline, not a separate file): renders when `pendingMode !== null && selectionDropdownOpen`, positioned near the active line
+   - Intercept `handleLineKeyDown` wrapper: if `pendingMode !== null` and user types first char or Enter → open dropdown, prevent default, clear pendingMode
+   - On dropdown item select: insert text into the active line via engine, close dropdown
+   - Fix Parenthetical button onClick: check `window.getSelection()`, if text selected in active line → wrap with parens; else → insert `()` at cursor
+   - In ScreenplayLine: add `autoCorrect="off"` and intercept `onInput` to reverse autocorrect on ext/int
+   - In `handleLineKeyDown` for `(` key: auto-close with `)`
+
+3. **VO insert logic**:
+   - When user picks a VO type and the current line is a `"character"` line: append suffix (e.g. ` (V.O.)`) to character name
+   - When current line is action: treat like a character line starting fresh → set type to character, set text to `"CHARACTER (V.O.)"` placeholder
+   - Cursor placed after the closing `)` of the VO suffix
+
+4. **No UI layout changes** — all new buttons match existing toolbar button style exactly.
